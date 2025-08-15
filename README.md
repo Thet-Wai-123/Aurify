@@ -1,3 +1,7 @@
+## Live Deployment
+
+You can view the deployed app here: [Aurify](https://aurify-bulr15k1r-sarakhan7s-projects.vercel.app/)
+
 ## Tech Stack (Aurify)
 
 When the app is finished, Aurify will use:
