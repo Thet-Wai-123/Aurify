@@ -1,22 +1,143 @@
-# Welcome to your Lovable project
+## Deployment: Vercel
 
-## Project info
+Aurify can be deployed easily to Vercel:
 
-**URL**: https://lovable.dev/projects/d57dec16-b167-4b76-a721-ea031b491c23
+1. Go to https://vercel.com and sign in with your GitHub account.
+2. Click "New Project" and import the Aurify repository.
+3. Set up environment variables in the Vercel dashboard (Settings > Environment Variables).
+4. Click "Deploy". Vercel will build and host your app automatically.
+
+Every push to `main` (or any branch you choose) will trigger a new deployment. Pull requests get their own preview URLs.
+
+---
+
+## Tech Stack (Aurify)
+
+When the app is finished, Aurify will use:
+
+- **Frontend:** React, Vite, TypeScript, shadcn-ui, Tailwind CSS
+- **State Management:** React Context, custom hooks
+- **Authentication:** Firebase Auth (or similar)
+- **AI Services:** Google Gemini API, custom feedback services
+- **Backend (optional):** Firebase, or custom Node.js/Express server (if needed)
+- **Deployment:** Vercel (recommended), Netlify, or similar
+- **Testing:** Jest, React Testing Library (if added)
+- **CI/CD:** GitHub Actions (optional)
+
+This stack is modern, scalable, and easy for contributors to work with.
+## Intern Onboarding & Contribution Tutorial
+
+To ensure code quality and prevent accidental changes to the main repository, all interns should work on their own forks. Here’s how to get started:
+
+### 1. Fork the Repository
+
+Go to the main Aurify repo (e.g., https://github.com/Aurify-AI/Aurify) and click the "Fork" button at the top right. This will create a personal copy of the repo under your GitHub account.
+
+### 2. Clone Your Fork
+
+Copy the URL of your fork (e.g., https://github.com/<your-username>/Aurify.git) and run:
+```sh
+git clone https://github.com/<your-username>/Aurify.git
+cd Aurify
+```
+
+### 3. Set Up the Project
+
+Follow the setup instructions in the README to install dependencies and run the project locally.
+
+### 4. Make Changes on a Branch
+
+Create a new branch for each feature or fix:
+```sh
+git checkout -b feature/my-feature
+```
+Make your changes and commit them:
+```sh
+git add .
+git commit -m "Describe your changes"
+```
+
+### 5. Push Changes to Your Fork
+
+```sh
+git push origin feature/my-feature
+```
+
+### 6. Open a Pull Request
+
+Go to your fork on GitHub, and you’ll see a “Compare & pull request” button. Click it to open a PR against the main Aurify repo. Add a clear description of your changes.
+
+### 7. Review & Merge
+
+Your PR will be reviewed by a maintainer. Once approved, it will be merged into the main repo.
+
+---
+
+**Best Practices:**
+- Always work on a branch, never on `main`.
+- Keep your fork up to date by syncing with the upstream repo regularly.
+- Ask questions and request reviews if you’re unsure about anything.
+
+This workflow keeps the main repo safe and ensures everyone’s work is reviewed before merging.
+# Aurify
+
+Aurify is a modern web application designed to help users practice, learn, and engage with AI-powered feedback and community features. Built with React, Vite, TypeScript, shadcn-ui, and Tailwind CSS, Aurify offers a sleek, interactive experience for users interested in language learning, productivity, or other AI-driven tasks.
+
+## What does Aurify do?
+
+Aurify provides:
+- AI-powered feedback and suggestions (using Google Gemini and other services)
+- Community features for sharing and tracking progress
+- Practice sessions and history tracking
+- Authentication and user profiles
+- Responsive design for mobile and desktop
+
+## How to run Aurify after you fork
+
+After forking the repository, follow these steps to get Aurify running locally:
+
+1. **Clone your fork**
+	```sh
+	git clone <YOUR_FORK_URL>
+	cd aurify
+	```
+2. **Install dependencies**
+	```sh
+	npm install
+	```
+3. **Set up environment variables**
+	- If you plan to use Firebase or AI services, create a `.env` file in the root directory and add your API keys and config. Example:
+	  ```env
+	  VITE_FIREBASE_API_KEY=your_firebase_api_key
+	  VITE_GEMINI_API_KEY=your_gemini_api_key
+	  ```
+	- Check `src/lib/firebase.ts` and `src/services/ai/geminiService.ts` for required variables.
+4. **Start the development server**
+	```sh
+	npm run dev
+	```
+	The app will be available at `http://localhost:5173` (or as shown in your terminal).
+
+## Technologies Used
+
+Aurify is built with:
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
+
+## Deployment
+
+You can deploy Aurify using Vercel, Netlify, or any static hosting provider. 
 
 ## How can I edit this code?
 
 There are several ways of editing your application.
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/d57dec16-b167-4b76-a721-ea031b491c23) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
 **Use your preferred IDE**
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+If you want to work locally using your own IDE, you can clone this repo and push changes. 
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -60,14 +181,3 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/d57dec16-b167-4b76-a721-ea031b491c23) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
