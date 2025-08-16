@@ -1,15 +1,6 @@
-## Deployment: Vercel
+## Live Deployment
 
-Aurify can be deployed easily to Vercel:
-
-1. Go to https://vercel.com and sign in with your GitHub account.
-2. Click "New Project" and import the Aurify repository.
-3. Set up environment variables in the Vercel dashboard (Settings > Environment Variables).
-4. Click "Deploy". Vercel will build and host your app automatically.
-
-Every push to `main` (or any branch you choose) will trigger a new deployment. Pull requests get their own preview URLs.
-
----
+You can view the deployed app here: [Aurify](https://aurify-bulr15k1r-sarakhan7s-projects.vercel.app/)
 
 ## Tech Stack (Aurify)
 
