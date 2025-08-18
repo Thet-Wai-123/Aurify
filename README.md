@@ -1,7 +1,13 @@
 # Aurify
 Aurify is a modern web application designed to help users practice, learn, and engage with AI-powered feedback and community features. Built with React, Vite, TypeScript, shadcn-ui, and Tailwind CSS, Aurify offers a sleek, interactive experience for users interested in language learning, productivity, or other AI-driven tasks.
 ## Live Deployment
+
 You can view the deployed app here: Aurify
+=======
+
+You can view the deployed app here: [Aurify](https://aurify-chi.vercel.app/)
+
+
 ## Tech Stack (Aurify)
 When the app is finished, Aurify will use:
 **Frontend**: React, Vite, TypeScript, shadcn-ui, Tailwind CSS
