@@ -1,14 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User
+  User,
+  GoogleAuthProvider,
+  sendEmailVerification,
+  updateProfile
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useToast } from '@/components/ui/use-toast';
+import { aurifySignIn, aurifySignUp } from '@/services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -46,8 +50,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
+
+      /*
+       * README: Do we have a need to access google token?
+       * TODO: If we do, implement a way to store refresh token
+       *
+       * const credidential = GoogleAuthProvider.credentialFromResult(result);
+       * GoogleAuthProvider.credential(await auth.currentUser.getIdToken());
+       * const token = credidential.accessToken;
+       */
+
       const user = result.user;
-      
+
       toast({
         title: "Welcome back!",
         description: `Signed in as ${user.displayName || user.email}`
@@ -64,9 +78,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const user = result.user;
-      
+      const user = await aurifySignIn(email, password);
+
       toast({
         title: "Welcome back!",
         description: `Signed in as ${user.email}`
@@ -83,12 +96,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUpWithEmail = async (email: string, password: string, name: string) => {
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      const user = result.user;
-      
+      // const result = await createUserWithEmailAndPassword(auth, email, password);
+      const user = await aurifySignUp(email, password);
+      await sendEmailVerification(user);
+      await updateProfile(user, {
+        displayName: name
+      })
       toast({
         title: "Account created!",
-        description: `Welcome to Aurify, ${name}!`
+        description: `Welcome to Aurify, ${user.displayName}!`
       });
     } catch (error: any) {
       console.error('Email sign-up error:', error);
