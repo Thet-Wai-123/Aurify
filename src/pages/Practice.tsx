@@ -76,10 +76,10 @@ const ScenarioProfessional = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Scenario Setup</CardTitle>
-        <CardDescription>Select a scenario, attach your resume, and paste the job description.</CardDescription>
+        <CardTitle>Choose Your Practice Scenario</CardTitle>
+        <CardDescription>Select what you'd like to practice and start your AI-powered session.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+      <CardContent className="space-y-4">
         <div>
           <Label>Scenario</Label>
           <Select defaultValue={scenario} onValueChange={handleScenarioChange}>
@@ -100,22 +100,17 @@ const ScenarioProfessional = () => {
             />
           )}
         </div>
-        <div>
-          <Label htmlFor="resumeFile">Resume (PDF or DOC/DOCX)</Label>
-          <Input id="resumeFile" type="file" accept=".pdf,.doc,.docx" />
-        </div>
-        <div className="md:col-span-2">
-          <Field id="jd" label="Job Description (paste)" placeholder="Paste text here" textarea />
-        </div>
-        <div className="md:col-span-2 flex gap-3">
+        
+        <div className="flex gap-3 pt-4">
           <Button 
             variant="hero" 
             onClick={() => navigate(`/session?mode=practice&scenario=${encodeURIComponent(getScenarioForSession())}`)}
             disabled={isCustom && !customScenario.trim()}
+            size="lg"
+            className="flex-1"
           >
-            Start Session
+            Start Practice Session
           </Button>
-          <Button variant="outline">Use Voice</Button>
         </div>
       </CardContent>
     </Card>

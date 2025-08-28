@@ -6,6 +6,7 @@ import { useSEO } from "@/hooks/use-seo";
 import { useToast } from "@/components/ui/use-toast";
 
 interface Score { name: string; score: number }
+type SavedResponse = string | { question?: string; response: string; expectedElements?: string[] };
 interface HistoryItem {
   id: number;
   createdAt: string;
@@ -13,7 +14,8 @@ interface HistoryItem {
   mode: string;
   coachName: string;
   voice: string;
-  responses: string[];
+  // older versions saved an array of strings; newer versions save objects
+  responses: SavedResponse[];
   scores: Score[];
 }
 
@@ -108,9 +110,12 @@ const History = () => {
                 <div className="mt-4 rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">Coach: {it.coachName} · Voice: {it.voice}</p>
                   <ol className="mt-2 list-decimal space-y-2 pl-4 text-sm">
-                    {it.responses.map((r, idx) => (
-                      <li key={idx}><span className="font-medium">Q{idx + 1}:</span> {r}</li>
-                    ))}
+                    {it.responses.map((r, idx) => {
+                      const text = typeof r === 'string' ? r : (r.response || r.question || '');
+                      return (
+                        <li key={idx}><span className="font-medium">Q{idx + 1}:</span> {text}</li>
+                      );
+                    })}
                   </ol>
                 </div>
               )}

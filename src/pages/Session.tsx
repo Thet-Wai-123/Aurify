@@ -1,175 +1,201 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import JellyfishAvatar from "@/components/branding/JellyfishAvatar";
+import SessionSetup from "@/components/practice/SessionSetup";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Mic, MicOff, Volume2 } from "lucide-react";
+import { Mic, MicOff, Volume2, Loader2, ArrowRight, RotateCcw } from "lucide-react";
+import { questionGeneratorService, type GeneratedQuestion } from "@/services/ai/questionGeneratorService";
+import { feedbackService, type AIFeedback } from "@/services/ai/feedbackService";
 
-const demoQuestions: Record<string, string[]> = {
-  "Interviews": [
-    "Tell me about yourself.",
-    "Describe a challenging project you led.",
-    "How do you handle tight deadlines?",
-    "Share a time you influenced without authority.",
-    "Why this role and company?",
-  ],
-  "Stand-up Meetings": [
-    "What did you do yesterday?",
-    "What will you do today?",
-    "Any blockers?",
-    "Who do you need help from?",
-    "What's the demo plan?",
-  ],
-  "Pitching Startups": [
-    "What problem are you solving?",
-    "What's your unique insight?",
-    "Who is your user?",
-    "How do you make money?",
-    "Why now?",
-  ],
-  "Improve Friendship": [
-    "What's one positive thing you appreciate about them?",
-    "What's the recent friction about?",
-    "How might they feel?",
-    "What's your goal for the next chat?",
-    "What small gesture can you do this week?",
-  ],
-  "Make a New Friend": [
-    "What's your one-line intro?",
-    "Why are you at this event?",
-    "What common interests can you share?",
-    "What's a good question to ask a stranger?",
-    "How will you follow up?",
-  ],
-  "Custom": [
-    "Set the scene for this practice.",
-    "Who is your audience?",
-    "What is your key message?",
-    "What risks or objections exist?",
-    "How will you close?",
-  ],
-};
+// Extend Window interface for speech recognition
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
-const speak = (text: string, voicePref: string) => {
-  if (!("speechSynthesis" in window)) return;
-  const u = new SpeechSynthesisUtterance(text);
-  // Simple voice mapping demo
-  const voices = window.speechSynthesis.getVoices();
-  const pick =
-    voicePref === "female"
-      ? voices.find(v => /female|woman|samantha|victoria|zira/i.test(v.name))
-      : voicePref === "animal"
-      ? voices.find(v => /novelty|whisper|bad|alien/i.test(v.name))
-      : voices.find(v => /male|man|daniel|fred|alex|george/i.test(v.name));
-  if (pick) u.voice = pick;
-  u.rate = 1.0;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-};
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+}
 
-const Session = () => {
-  const [params] = useSearchParams();
-  const scenario = params.get("scenario") || "Interviews";
-  const mode = params.get("mode") || "practice";
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+export default function Session() {
+  const [searchParams] = useSearchParams();
+  const mode = searchParams.get("mode") || "interview";
+  const scenario = searchParams.get("scenario") || "Interviews";
   const { toast } = useToast();
 
+  // Setup phase
+  const [setupComplete, setSetupComplete] = useState(false);
+  const [sessionData, setSessionData] = useState<{
+    experienceLevel: string;
+  } | null>(null);
+
+  // Session state
   const [started, setStarted] = useState(false);
   const [index, setIndex] = useState(0);
-  const [transcript, setTranscript] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [voice, setVoice] = useState("male"); // male | female | animal
-  const [responses, setResponses] = useState<string[]>([]);
-  const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [responses, setResponses] = useState<Array<{ question: string; response: string; expectedElements?: string[] }>>([]);
+  const [timeLeft, setTimeLeft] = useState<number>(60); // Increased to 60 seconds
   const [coachName, setCoachName] = useState("Auri");
+  const [voice, setVoice] = useState("alloy");
+  
+  // AI-generated content
+  const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [feedback, setFeedback] = useState<AIFeedback | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Load defaults from profile (if saved)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("aurify_profile");
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p.voice) setVoice(p.voice);
-        if (p.jellyfishName) setCoachName(p.jellyfishName);
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Text-to-speech state
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const currentQuestion = questions[index]?.question || "Session complete!";
+  const currentQuestionData = questions[index];
+
+  // Text-to-speech function
+  const speakQuestion = (text: string) => {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Set voice based on user selection
+      const voices = window.speechSynthesis.getVoices();
+      const selectedVoice = voices.find(v => 
+        v.name.toLowerCase().includes(voice.toLowerCase()) ||
+        (voice === 'alloy' && v.name.includes('Google')) ||
+        (voice === 'echo' && v.name.includes('Microsoft')) ||
+        (voice === 'fable' && v.name.includes('Apple'))
+      );
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
       }
-    } catch {}
-  }, []);
-
-  const currentQuestion = useMemo(() => demoQuestions[scenario]?.[index] ?? "Let's begin.", [scenario, index]);
-
-  useEffect(() => {
-    if (started) speak(currentQuestion, voice);
-  }, [started, index, voice, currentQuestion]);
-
-  // Auto-start for quiz mode (speak immediately)
-  useEffect(() => {
-    if (mode === "quiz" && !started) {
-      setStarted(true);
-    }
-  }, [mode, started]);
-
-// Basic (optional) browser speech recognition
-  const recognitionRef = useRef<any>();
-  useEffect(() => {
-    const W = window as any;
-    const SR = W.SpeechRecognition || W.webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
-    rec.lang = "en-US";
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e: any) => {
-      let text = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        text += e.results[i][0].transcript + " ";
-      }
-      setTranscript(text.trim());
-    };
-    recognitionRef.current = rec;
-    return () => rec.abort();
-  }, []);
-
-  // Auto-activate mic for quiz mode
-  useEffect(() => {
-    const rec = recognitionRef.current;
-    if (mode === "quiz" && started && rec && !isRecording) {
-      setTranscript("");
-      rec.start();
-      setIsRecording(true);
-    }
-  }, [mode, started, isRecording]);
-
-  const toggleMic = () => {
-    const rec = recognitionRef.current;
-    if (!rec) {
-      toast({ 
-        title: "Voice input unavailable", 
-        description: "Your browser doesn't support speech recognition. Please use a supported browser like Chrome or Edge.",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (isRecording) {
-      rec.stop();
-      setIsRecording(false);
-    } else {
-      setTranscript("");
-      rec.start();
-      setIsRecording(true);
+      
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      
+      window.speechSynthesis.speak(utterance);
     }
   };
 
-const onSend = () => {
-    const answer = transcript.trim();
-    const finalResponses = answer ? [...responses, answer] : [...responses];
+  // Auto-speak question when it changes
+  useEffect(() => {
+    if (started && currentQuestion && currentQuestion !== "Session complete!") {
+      // Small delay to ensure UI is ready
+      setTimeout(() => {
+        speakQuestion(currentQuestion);
+      }, 500);
+    }
+  }, [currentQuestion, started]);
 
-    if (index < 4) {
-      setResponses(finalResponses);
+  const handleSetupComplete = async (setupData: {
+    experienceLevel: string;
+  }) => {
+    setSessionData(setupData);
+    setIsGeneratingQuestions(true);
+
+    try {
+      // Generate AI questions based on scenario and experience level
+      const generatedQuestions = await questionGeneratorService.generateQuestions({
+        scenario,
+        userProfile: {
+          experience: setupData.experienceLevel,
+        }
+      }, 5);
+
+      setQuestions(generatedQuestions);
+      setSetupComplete(true);
+      toast({ 
+        title: "Questions Generated!", 
+        description: "AI has created personalized questions for your experience level." 
+      });
+    } catch (error) {
+      console.error('Failed to generate questions:', error);
+      toast({ 
+        title: "Generation Failed", 
+        description: "Using fallback questions. AI service may be temporarily unavailable.",
+        variant: "destructive"
+      });
+      // Use fallback questions
+      setQuestions([]);
+      setSetupComplete(true);
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+  const onSend = async () => {
+    const answer = transcript.trim();
+    if (!answer) {
+      toast({ title: "No response", description: "Please provide a response before continuing." });
+      return;
+    }
+
+    const newResponse = {
+      question: currentQuestion,
+      response: answer,
+      expectedElements: currentQuestionData?.expectedElements
+    };
+
+    const updatedResponses = [...responses, newResponse];
+
+    if (index < questions.length - 1) {
+      // Move to next question
+      setResponses(updatedResponses);
       setIndex(index + 1);
       setTranscript("");
-      setTimeLeft(30);
+      setTimeLeft(60);
+      
       // Stop recording when moving to next question
       if (isRecording) {
         const rec = recognitionRef.current;
@@ -177,19 +203,35 @@ const onSend = () => {
         setIsRecording(false);
       }
     } else {
-      // Finish
-      setStarted(false);
+  // Finish session and get AI feedback
+  // mark index past the last question so the completion UI is shown
+  setIndex(questions.length);
+  setStarted(false);
       setIsRecording(false);
-      // Simple demo scoring
-      const base = mode === "quiz" ? 70 : 75;
-      const scores = [
-        { name: "Confidence", score: base + Math.floor(Math.random() * 20) },
-        { name: "Clarity", score: base + Math.floor(Math.random() * 20) },
-        { name: "Empathy", score: base - 5 + Math.floor(Math.random() * 20) },
-        { name: "Relevance", score: base + Math.floor(Math.random() * 20) },
-        { name: "Energy", score: base - 10 + Math.floor(Math.random() * 20) },
-      ];
+      setIsAnalyzing(true);
+      setResponses(updatedResponses);
+      
       try {
+        // Get comprehensive AI feedback for the entire session
+        const sessionFeedback = await feedbackService.analyzeFullSession(
+          updatedResponses,
+          {
+            scenario
+          }
+        );
+        
+        setFeedback(sessionFeedback.overallFeedback);
+        
+        // Convert AI feedback to scores for storage
+        const scores = [
+          { name: "Confidence", score: sessionFeedback.overallFeedback.confidence },
+          { name: "Clarity", score: sessionFeedback.overallFeedback.clarity },
+          { name: "Empathy", score: sessionFeedback.overallFeedback.empathy },
+          { name: "Relevance", score: sessionFeedback.overallFeedback.relevance },
+          { name: "Energy", score: sessionFeedback.overallFeedback.energy },
+        ];
+        
+        // Save to history with full AI feedback
         const raw = localStorage.getItem("aurify_history");
         const list = raw ? JSON.parse(raw) : [];
         list.unshift({
@@ -199,190 +241,539 @@ const onSend = () => {
           mode,
           coachName,
           voice,
-          responses: finalResponses,
+          responses: updatedResponses,
           scores,
+          aiFeedback: sessionFeedback.overallFeedback,
+          sessionInsights: sessionFeedback.sessionInsights,
+          questions: questions.map(q => q.question),
         });
         localStorage.setItem("aurify_history", JSON.stringify(list));
-      } catch {}
-      toast({ title: "Session complete", description: "Saved to History. See feedback below." });
+        
+        toast({ 
+          title: "Session Complete!", 
+          description: "AI feedback generated successfully. Check your detailed analysis below." 
+        });
+      } catch (error) {
+        console.error('Failed to get AI feedback:', error);
+        toast({ 
+          title: "Session Complete", 
+          description: "Session saved. AI feedback temporarily unavailable.",
+          variant: "destructive"
+        });
+        
+        // Fallback to basic scores
+        const scores = [
+          { name: "Confidence", score: 75 },
+          { name: "Clarity", score: 80 },
+          { name: "Empathy", score: 70 },
+          { name: "Relevance", score: 85 },
+          { name: "Energy", score: 75 },
+        ];
+        
+        const raw = localStorage.getItem("aurify_history");
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift({
+          id: Date.now(),
+          createdAt: new Date().toISOString(),
+          scenario,
+          mode,
+          coachName,
+          voice,
+          responses: updatedResponses,
+          scores,
+          questions: questions.map(q => q.question),
+        });
+        localStorage.setItem("aurify_history", JSON.stringify(list));
+      } finally {
+        setIsAnalyzing(false);
+      }
     }
   };
 
-  // Quiz timer: auto-advance when time is up
-  useEffect(() => {
-    if (!(started && mode === "quiz")) return;
-    setTimeLeft(30);
-    const id = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(id);
-          onSend();
-          return 30;
+  const toggleRecording = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast({ title: "Not supported", description: "Speech recognition not supported in this browser." });
+      return;
+    }
+
+    if (isRecording) {
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        recognition.stop();
+      }
+      setIsRecording(false);
+    } else {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+
+      recognition.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
         }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [started, index, mode]);
+        if (finalTranscript) {
+          setTranscript(prev => prev + finalTranscript);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
+        toast({ title: "Recording error", description: "Please try again." });
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    }
+  };
+
+  // Voice preview function
+  const previewVoice = (voiceType: string, text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      
+      const selectedVoice = voices.find(v => 
+        v.name.toLowerCase().includes(voiceType.toLowerCase()) ||
+        (voiceType === 'alloy' && v.name.includes('Google')) ||
+        (voiceType === 'echo' && v.name.includes('Microsoft')) ||
+        (voiceType === 'fable' && v.name.includes('Apple'))
+      );
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  useEffect(() => {
+    if (started && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [started, timeLeft]);
+
+  // Load voices when component mounts
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      // Load voices
+      window.speechSynthesis.getVoices();
+      
+      // Some browsers need this event
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
+
+  // Show setup screen if not completed
+  if (!setupComplete) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="container mx-auto py-8">
+          {isGeneratingQuestions ? (
+            <Card className="max-w-md mx-auto">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                  <h3 className="font-semibold">Generating Personalized Questions</h3>
+                  <p className="text-sm text-muted-foreground">
+                    AI is analyzing your background to create relevant questions...
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <SessionSetup scenario={scenario} onStart={handleSetupComplete} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if no questions were generated
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="container mx-auto py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Questions Not Available</CardTitle>
+              <CardDescription>
+                Unable to generate personalized questions. Please try again.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={() => setSetupComplete(false)}
+                className="w-full"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className="container mx-auto max-w-4xl px-4 pb-24 pt-10">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">{mode === "quiz" ? "Quiz" : "Practice"} Session</h1>
-          <p className="text-muted-foreground">Scenario: {scenario} · 5 questions</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="container mx-auto max-w-4xl space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900">{scenario} Practice</h1>
+          <p className="text-gray-600 mt-2">AI-Powered Personalized Session</p>
         </div>
-        <JellyfishAvatar size={96} circular speaking={started && !isRecording} />
-      </header>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Aurify Coach</CardTitle>
-          <CardDescription>Jellyfish voice and options</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-1">
-            <label className="text-sm">Jellyfish name</label>
-            <Input value={coachName} onChange={(e) => setCoachName(e.target.value)} aria-label="Jellyfish name" />
-          </div>
-          <div className="md:col-span-1">
-            <label className="text-sm">Voice</label>
-            <Select defaultValue={voice} onValueChange={setVoice}>
-              <SelectTrigger className="mt-2"><SelectValue placeholder="Voice" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="animal">Animal Crossing-style</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-1 flex items-end">
-            {!started ? (
-              <Button className="w-full" onClick={() => { setStarted(true); speak(currentQuestion, voice); }}>Start</Button>
-            ) : (
-              <Button 
-                variant={isRecording ? "destructive" : "outline"} 
-                className="w-full" 
-                onClick={toggleMic}
-              >
-                {isRecording ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-                {isRecording ? "Stop Recording" : "Start Recording"}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {started && (
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Question {index + 1} of 5</CardTitle>
-                <CardDescription>{currentQuestion}</CardDescription>
+        {!started && index < questions.length && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Ready to Practice?</CardTitle>
+              <CardDescription>
+                {questions.length} personalized questions generated for your {scenario.toLowerCase()} practice session.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium">Coach Name</label>
+                  <Input value={coachName} onChange={(e) => setCoachName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Voice</label>
+                  <Select value={voice} onValueChange={setVoice}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alloy">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Alloy (Professional)</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              previewVoice("alloy", "Hello, I'm your interview coach. Let's practice together!");
+                            }}
+                            className="ml-2 h-6 w-6 p-0"
+                          >
+                            <Volume2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="echo">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Echo (Friendly)</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              previewVoice("echo", "Hi there! Ready to ace your interview?");
+                            }}
+                            className="ml-2 h-6 w-6 p-0"
+                          >
+                            <Volume2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="fable">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Fable (Warm)</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              previewVoice("fable", "Welcome! I'm here to help you practice and improve.");
+                            }}
+                            className="ml-2 h-6 w-6 p-0"
+                          >
+                            <Volume2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              {mode === "quiz" && <div className="text-sm text-muted-foreground">Time: {timeLeft}s</div>}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Voice Recording Status */}
-            <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
-              <div className="text-center space-y-4">
-                {isRecording ? (
-                  <>
-                    <div className="flex items-center justify-center">
-                      <Button
-                        onClick={toggleMic}
-                        size="lg"
-                        variant="destructive"
-                        className="h-20 w-20 rounded-full animate-pulse"
-                      >
-                        <Mic className="h-8 w-8" />
-                      </Button>
+              
+              {/* Preview of questions */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Your Personalized Questions:</h4>
+                <ul className="text-sm space-y-1">
+                  {questions.slice(0, 3).map((q, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">{i + 1}.</span>
+                      <span className="text-gray-700">{q.question}</span>
+                    </li>
+                  ))}
+                  {questions.length > 3 && (
+                    <li className="text-gray-500 italic">...and {questions.length - 3} more</li>
+                  )}
+                </ul>
+              </div>
+
+              <Button onClick={() => setStarted(true)} className="w-full" size="lg">
+                Start AI-Powered Practice
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {started && index < questions.length && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <JellyfishAvatar size={24} />
+                    <div>
+                      <CardTitle className="text-lg">{coachName}</CardTitle>
+                      <CardDescription>Question {index + 1} of {questions.length}</CardDescription>
                     </div>
-                    <p className="text-lg font-medium text-red-600">Recording...</p>
-                    <p className="text-sm text-muted-foreground">Click to stop recording</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-center">
-                      <Button
-                        onClick={toggleMic}
-                        size="lg"
-                        variant="outline"
-                        className="h-20 w-20 rounded-full hover:bg-primary hover:text-primary-foreground transition-all duration-200"
-                      >
-                        <Mic className="h-8 w-8" />
-                      </Button>
-                    </div>
-                    <p className="text-lg font-medium">Ready to Record</p>
-                    <p className="text-sm text-muted-foreground">Click the microphone to start recording your answer</p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Live Transcript Display */}
-            {transcript && (
-              <div className="p-4 bg-secondary/50 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">Live Transcript:</p>
-                <p className="text-base">{transcript}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 justify-center">
-              <Button onClick={() => speak(currentQuestion, voice)} variant="outline">
-                <Volume2 className="mr-2 h-4 w-4" />
-                Repeat Question
-              </Button>
-              <Button 
-                onClick={onSend}
-                disabled={!transcript.trim()}
-                className="min-w-[120px]"
-              >
-                {index < 4 ? "Next Question" : "Finish Session"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!started && index === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Feedback</CardTitle>
-            <CardDescription>Saved to History. This will be AI-generated once connected.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                { name: "Confidence", score: 82 },
-                { name: "Clarity", score: 88 },
-                { name: "Empathy", score: 74 },
-                { name: "Relevance", score: 90 },
-                { name: "Energy", score: 80 },
-              ].map((s) => (
-                <div key={s.name} className="rounded-lg border p-4">
-                  <div className="mb-2 flex items-center justify-between"><span className="font-medium">{s.name}</span><span className="text-sm text-muted-foreground">{s.score}</span></div>
-                  <div className="h-2 w-full rounded bg-secondary">
-                    <div className="h-2 rounded bg-primary" style={{ width: `${s.score}%` }} />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-blue-600">{timeLeft}s</div>
+                    <div className="text-xs text-gray-500">Time remaining</div>
                   </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 grid gap-3">
-              <p className="text-sm text-muted-foreground">{mode === "quiz" ? "Advice: Be concise under pressure. Answer directly, avoid filler, and lead with impact metrics." : "Advice: Focus on concise openings and concrete metrics. Slow down slightly and emphasize outcomes."}</p>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => window.location.assign("/history")}>View History</Button>
-                <Button onClick={() => window.location.assign(`/session?mode=${mode}&scenario=${encodeURIComponent(scenario)}`)}>Retry</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </main>
-  );
-};
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <p className="text-lg font-medium flex-1">{currentQuestion}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => speakQuestion(currentQuestion)}
+                      disabled={isSpeaking}
+                      className="ml-2 shrink-0"
+                    >
+                      <Volume2 className={`h-4 w-4 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                    </Button>
+                  </div>
+                  {currentQuestionData?.category && (
+                    <div className="mt-2 flex gap-2">
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {currentQuestionData.category}
+                      </span>
+                      <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                        {currentQuestionData.difficulty}
+                      </span>
+                    </div>
+                  )}
+                  {isSpeaking && (
+                    <p className="text-xs text-blue-600 mt-2 animate-pulse">🎤 Speaking question...</p>
+                  )}
+                </div>
 
-export default Session;
+                <div className="flex items-center justify-center">
+                  <Button
+                    onClick={toggleRecording}
+                    size="lg"
+                    className={`h-20 w-20 rounded-full ${
+                      isRecording 
+                        ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                        : 'bg-blue-500 hover:bg-blue-600'
+                    }`}
+                  >
+                    {isRecording ? (
+                      <MicOff className="h-8 w-8" />
+                    ) : (
+                      <Mic className="h-8 w-8" />
+                    )}
+                  </Button>
+                </div>
+
+                <p className="text-center text-sm text-gray-600">
+                  {isRecording ? "Recording... Click to stop" : "Click to start recording your response"}
+                </p>
+
+                {transcript && (
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-green-800 mb-2">Your Response:</h4>
+                    <p className="text-green-700">{transcript}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setTranscript("")}
+                    disabled={!transcript}
+                  >
+                    Clear
+                  </Button>
+                  <Button 
+                    onClick={onSend} 
+                    className="flex-1"
+                    disabled={!transcript.trim()}
+                  >
+                    {index < questions.length - 1 ? (
+                      <>Next Question <ArrowRight className="ml-2 h-4 w-4" /></>
+                    ) : (
+                      "Finish & Get AI Feedback"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {!started && index >= questions.length && (
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Feedback Analysis</CardTitle>
+              <CardDescription>
+                {isAnalyzing ? "Analyzing your responses..." : "Powered by Google Gemini AI"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isAnalyzing ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center space-y-4">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                    <p className="text-muted-foreground">Generating personalized feedback...</p>
+                    <p className="text-sm text-gray-500">This may take a few moments</p>
+                  </div>
+                </div>
+              ) : feedback ? (
+                <>
+                  {/* Overall Score */}
+                  <div className="text-center mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
+                    <div className="text-4xl font-bold text-blue-600 mb-2">
+                      {Math.round(feedback.overallScore)}/100
+                    </div>
+                    <p className="text-lg font-medium text-gray-700">Overall Performance</p>
+                  </div>
+
+                  {/* AI Scores */}
+                  <div className="grid gap-4 md:grid-cols-2 mb-6">
+                    {[
+                      { name: "Confidence", score: feedback.confidence },
+                      { name: "Clarity", score: feedback.clarity },
+                      { name: "Empathy", score: feedback.empathy },
+                      { name: "Relevance", score: feedback.relevance },
+                      { name: "Energy", score: feedback.energy },
+                    ].map((s) => (
+                      <div key={s.name} className="rounded-lg border p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-medium">{s.name}</span>
+                          <span className="text-sm text-muted-foreground">{Math.round(s.score)}/100</span>
+                        </div>
+                        <div className="h-2 w-full rounded bg-secondary">
+                          <div 
+                            className="h-2 rounded bg-primary transition-all duration-500" 
+                            style={{ width: `${Math.round(s.score)}%` }} 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* AI Summary */}
+                  <div className="mb-6 p-4 bg-secondary/50 rounded-lg">
+                    <h4 className="font-medium mb-2">AI Summary</h4>
+                    <p className="text-sm">{feedback.summary}</p>
+                  </div>
+
+                  {/* Detailed Analysis */}
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <h4 className="font-medium mb-3 text-green-600">✓ Strengths</h4>
+                      <ul className="space-y-2">
+                        {feedback.strengths.map((strength, i) => (
+                          <li key={i} className="text-sm flex items-start gap-2">
+                            <span className="text-green-500 mt-1">•</span>
+                            {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium mb-3 text-orange-600">⚡ Areas for Improvement</h4>
+                      <ul className="space-y-2">
+                        {feedback.improvements.map((improvement, i) => (
+                          <li key={i} className="text-sm flex items-start gap-2">
+                            <span className="text-orange-500 mt-1">•</span>
+                            {improvement}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Suggestions */}
+                  {feedback.suggestions.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="font-medium mb-3 text-blue-600">💡 AI Suggestions</h4>
+                      <ul className="space-y-2">
+                        {feedback.suggestions.map((suggestion, i) => (
+                          <li key={i} className="text-sm flex items-start gap-2">
+                            <span className="text-blue-500 mt-1">•</span>
+                            {suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Detailed Analysis Sections */}
+                  <div className="grid md:grid-cols-2 gap-4 mb-6">
+                    {Object.entries(feedback.detailedAnalysis).map(([key, analysis]) => (
+                      <div key={key} className="p-3 border rounded-lg">
+                        <h5 className="font-medium capitalize mb-1">{key}</h5>
+                        <p className="text-sm text-gray-600">{analysis}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button variant="outline" onClick={() => window.location.assign("/history")}>
+                      View History
+                    </Button>
+                    <Button onClick={() => window.location.assign(`/session?mode=${mode}&scenario=${encodeURIComponent(scenario)}`)}>
+                      Practice Again
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No feedback available. Please try again.</p>
+                  <Button className="mt-4" onClick={() => window.location.assign(`/session?mode=${mode}&scenario=${encodeURIComponent(scenario)}`)}>
+                    Retry Session
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
