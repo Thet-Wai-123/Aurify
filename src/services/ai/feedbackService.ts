@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const apiKey = 'AIzaSyDnaWmawIxbto6Tz-py3ovC_uSMOGiRM6c';
+// Use Vite env variable for the API key. Create .env with VITE_GOOGLE_API_KEY to enable real AI calls.
+const apiKey = (import.meta.env?.VITE_GOOGLE_API_KEY as string) || '';
+if (!apiKey) console.warn('[FeedbackService] No API key found. Falling back to heuristic feedback. Set VITE_GOOGLE_API_KEY in your .env to enable AI.');
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export interface AIFeedback {
@@ -48,15 +50,40 @@ export interface SessionFeedback {
 }
 
 export class FeedbackService {
-  private model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  private primaryModelId = "models/gemini-2.5-pro";
+  private fallbackModelIds = ["models/gemini-1.5-pro", "models/gemini-2.5-flash-lite"];
+  private model = genAI.getGenerativeModel({ model: this.primaryModelId });
+
+  private async callGenerateWithRetry(prompt: string, attempts = 3) {
+    const modelsToTry = [this.primaryModelId, ...this.fallbackModelIds];
+
+    for (const modelId of modelsToTry) {
+      const currentModel = genAI.getGenerativeModel({ model: modelId });
+      let i = 0;
+      while (i < attempts) {
+        try {
+          const res = await currentModel.generateContent(prompt);
+          return res;
+        } catch (err: any) {
+          i++;
+          console.warn(`[FeedbackService] model=${modelId} attempt=${i} failed:`, err?.message || err);
+          if (i < attempts) await new Promise(r => setTimeout(r, Math.pow(2, i) * 200));
+        }
+      }
+      console.warn(`[FeedbackService] Falling back from model ${modelId} to next model.`);
+    }
+    throw new Error('All models failed');
+  }
 
   async analyzeResponse(response: string, context: PracticeContext): Promise<AIFeedback> {
     try {
-      const prompt = this.buildAnalysisPrompt(response, context);
-      const result = await this.model.generateContent(prompt);
-      const responseText = result.response.text();
+  const safeResponse = response.slice(0, 4000);
+  const safeContext = { ...context, resume: context.resume?.slice(0, 2000), jobDescription: context.jobDescription?.slice(0, 2000) } as PracticeContext;
+  const prompt = this.buildAnalysisPrompt(safeResponse, safeContext);
+  const result = await this.callGenerateWithRetry(prompt, 3);
+  const responseText = result.response.text();
 
-      return this.parseAIResponse(responseText);
+  return this.parseAIResponse(responseText);
     } catch (error) {
       console.error('AI analysis failed:', error);
       return this.getFallbackFeedback(response, context);
@@ -68,11 +95,13 @@ export class FeedbackService {
     context: { scenario: string; resume?: string; jobDescription?: string }
   ): Promise<SessionFeedback> {
     try {
-      const prompt = this.buildSessionAnalysisPrompt(responses, context);
-      const result = await this.model.generateContent(prompt);
-      const responseText = result.response.text();
+  // Truncate session data to reasonable size to avoid provider errors
+  const safeResponses = responses.map(r => ({ question: r.question, response: r.response.slice(0, 2000), expectedElements: r.expectedElements }));
+  const prompt = this.buildSessionAnalysisPrompt(safeResponses as any, { scenario: context.scenario, resume: context.resume?.slice(0, 2000), jobDescription: context.jobDescription?.slice(0, 2000) });
+  const result = await this.callGenerateWithRetry(prompt, 3);
+  const responseText = result.response.text();
 
-      return this.parseSessionResponse(responseText, responses);
+  return this.parseSessionResponse(responseText, responses);
     } catch (error) {
       console.error('Session analysis failed:', error);
       return this.getFallbackSessionFeedback(responses, context);
@@ -128,8 +157,9 @@ export class FeedbackService {
         "delivery": "Analysis of communication style and confidence",
         "impact": "Analysis of how compelling and memorable the response was"
       },
-      "summary": "Comprehensive summary of performance with key takeaways"
+    "summary": "Comprehensive summary of performance with key takeaways"
     }
+    IMPORTANT: Return ONLY valid JSON and nothing else. Do not include commentary or additional text. The JSON must contain numeric scores and arrays described above and be directly parseable with JSON.parse().
     `;
   }
 
@@ -181,16 +211,45 @@ export class FeedbackService {
         "summary": "Complete session summary with key insights"
       },
       "sessionInsights": {
-        "consistencyScore": 85,
-        "improvementTrend": "Improved throughout session",
-        "keyThemes": ["Theme 1", "Theme 2", "Theme 3"],
-        "recommendedFocus": ["Focus area 1", "Focus area 2", "Focus area 3"]
+          "consistencyScore": 85,
+          "improvementTrend": "Improved throughout session",
+          "keyThemes": ["Theme 1", "Theme 2", "Theme 3"],
+          "recommendedFocus": ["Focus area 1", "Focus area 2", "Focus area 3"]
+        }
       }
-    }
-    `;
+
+      IMPORTANT: Return ONLY valid JSON and nothing else. The response must be directly parseable with JSON.parse() and contain the keys "overallFeedback" and "sessionInsights" as shown above.
+      `;
   }
 
   private parseAIResponse(text: string): AIFeedback {
+    // Robust parsing: try direct JSON, then regex-based extraction, log raw on failure
+    try {
+      const direct = JSON.parse(text);
+      if (direct && typeof direct === 'object') {
+        return {
+          confidence: direct.confidence || 75,
+          clarity: direct.clarity || 75,
+          empathy: direct.empathy || 75,
+          relevance: direct.relevance || 75,
+          energy: direct.energy || 75,
+          overallScore: direct.overallScore || 75,
+          strengths: direct.strengths || [],
+          improvements: direct.improvements || [],
+          suggestions: direct.suggestions || [],
+          detailedAnalysis: direct.detailedAnalysis || {
+            structure: "Analysis not available",
+            content: "Analysis not available",
+            delivery: "Analysis not available",
+            impact: "Analysis not available"
+          },
+          summary: direct.summary || "Feedback analysis completed."
+        };
+      }
+    } catch (e) {
+      // ignore and try regex
+    }
+
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -215,9 +274,10 @@ export class FeedbackService {
         };
       }
     } catch (e) {
-      console.error('Failed to parse AI response:', e);
+      console.error('[FeedbackService] Failed to parse AI response JSON:', e);
     }
 
+    console.warn('[FeedbackService] Raw AI response (could not parse):', text);
     return this.getFallbackFeedback('', {} as PracticeContext);
   }
 

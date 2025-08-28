@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const apiKey = 'AIzaSyDnaWmawIxbto6Tz-py3ovC_uSMOGiRM6c';
+// Read API key from Vite environment variable for safety. Set VITE_GOOGLE_API_KEY in your .env.
+const apiKey = (import.meta.env?.VITE_GOOGLE_API_KEY as string) || '';
+if (!apiKey) console.warn('[QuestionGeneratorService] No API key found. Falling back to local questions. Set VITE_GOOGLE_API_KEY in your .env to enable AI.');
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export interface SessionContext {
@@ -23,15 +25,42 @@ export interface GeneratedQuestion {
 }
 
 export class QuestionGeneratorService {
-  private model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  // Primary model to use; will fallback to others if it fails
+  private primaryModelId = "models/gemini-2.5-pro";
+  private fallbackModelIds = ["models/gemini-1.5-pro", "models/gemini-2.5-flash-lite"];
+  private model = genAI.getGenerativeModel({ model: this.primaryModelId });
+
+  // Generic helper to call generateContent with retries and model fallbacks
+  private async callGenerateWithRetry(prompt: string, attempts = 3) {
+    const modelsToTry = [this.primaryModelId, ...this.fallbackModelIds];
+
+    for (const modelId of modelsToTry) {
+      const currentModel = genAI.getGenerativeModel({ model: modelId });
+      let i = 0;
+      while (i < attempts) {
+        try {
+          const res = await currentModel.generateContent(prompt);
+          return res;
+        } catch (err: any) {
+          i++;
+          console.warn(`[QuestionGeneratorService] model=${modelId} attempt=${i} failed:`, err?.message || err);
+          if (i < attempts) await new Promise(r => setTimeout(r, Math.pow(2, i) * 200));
+        }
+      }
+      console.warn(`[QuestionGeneratorService] Falling back from model ${modelId} to next model.`);
+    }
+    throw new Error('All models failed');
+  }
 
   async generateQuestions(context: SessionContext, numQuestions: number = 5): Promise<GeneratedQuestion[]> {
     try {
-      const prompt = this.buildQuestionPrompt(context, numQuestions);
-      const result = await this.model.generateContent(prompt);
-      const responseText = result.response.text();
-      
-      return this.parseQuestionResponse(responseText);
+  // truncate long inputs to reduce request size
+  const safeContext = { ...context, resume: context.resume?.slice(0, 2000), jobDescription: context.jobDescription?.slice(0, 2000) };
+  const prompt = this.buildQuestionPrompt(safeContext as SessionContext, numQuestions);
+  const result = await this.callGenerateWithRetry(prompt, 3);
+  const responseText = result.response.text();
+
+  return this.parseQuestionResponse(responseText);
     } catch (error) {
       console.error('Question generation failed:', error);
       return this.getFallbackQuestions(context.scenario);
@@ -58,7 +87,7 @@ export class QuestionGeneratorService {
     - Difficulty level (easy, medium, hard)
     - Key elements a good answer should include
 
-    Format your response as JSON:
+    Format your response as JSON (ONLY JSON, no extra text):
     {
       "questions": [
         {
@@ -71,15 +100,41 @@ export class QuestionGeneratorService {
       ]
     }
 
-    Make sure questions are:
-    - Tailored to their specific experience level and background
-    - Relevant to the job they're applying for
-    - Appropriate for the interview scenario
-    - Designed to elicit detailed, meaningful responses
-    `;
+    Few-shot example (input -> expected JSON):
+    INPUT:
+    Resume: "Senior frontend engineer with 5 years experience building React apps, led a team of 3, shipped metrics-driven features"
+    Job Description: "Frontend engineer role focused on performance and user-facing metrics"
+
+    EXPECTED JSON (excerpt):
+    {
+      "questions": [
+        {
+          "question": "Describe a time you improved a page's performance. What approach did you take and what was the impact?",
+          "category": "technical",
+          "difficulty": "medium",
+          "expectedElements": ["profiling approach", "specific change", "measured impact (metrics)"],
+          "followUpQuestions": ["How did you validate the improvement?", "What trade-offs did you consider?"]
+        }
+      ]
+    }
+
+    Make sure each generated question references the candidate resume or job description where relevant (e.g., mention their experience level, technologies, or domain), and include clear "expectedElements" that map to resume highlights or JD requirements.
+
+    IMPORTANT: Return ONLY valid JSON and nothing else. The JSON must be directly parseable by JSON.parse() and be a single object with a "questions" array.
+
+  `;
   }
 
   private parseQuestionResponse(text: string): GeneratedQuestion[] {
+    // Try a few robust parsing strategies and log raw response for debugging
+    try {
+      // Try direct parse
+      const direct = JSON.parse(text);
+      if (direct?.questions) return direct.questions;
+    } catch (err) {
+      // ignore
+    }
+
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -87,9 +142,11 @@ export class QuestionGeneratorService {
         return parsed.questions || [];
       }
     } catch (e) {
-      console.error('Failed to parse question response:', e);
+      console.error('[QuestionGeneratorService] Failed to parse question response JSON:', e);
     }
 
+    // If parsing failed, log the raw text to help debugging and return fallback
+    console.warn('[QuestionGeneratorService] Raw AI response (could not parse):', text);
     return this.getFallbackQuestions('Interviews');
   }
 
