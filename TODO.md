@@ -1,22 +1,24 @@
-# API Keys Migration to .env - Progress Tracker
+# Aurify Practice Section Fixes
 
-## ✅ All Tasks Completed Successfully!
+## Tasks to Complete:
 
-## Completed Tasks:
+### Practice Page (Practice.tsx)
+- [x] Remove the duplicate "Stand-up Meeting" card from ScenarioProfessional component
+- [x] Convert "Custom" dropdown to allow typing custom scenarios (make it editable)
+- [x] Clean up layout after removing extra card
 
-- [x] Analyzed current project structure
-- [x] Identified hardcoded API keys in Firebase config
-- [x] Confirmed Gemini service already uses env vars correctly
-- [x] Created implementation plan
-- [x] Create .env file with Firebase and AI API keys
-- [x] Update .gitignore to exclude .env files
-- [x] Update src/lib/firebase.ts to use environment variables
-- [x] Create .env.example template file
-- [x] Verify environment variables are loaded correctly
-- [x] Test Firebase authentication functionality
+### Session Page (Session.tsx)  
+- [x] Remove the textarea input box from session interface
+- [x] Make voice recording the primary/only input method
+- [x] Update UI to focus on microphone button as main interaction
+- [x] Improve voice recording experience with better visual feedback
 
-## Summary:
-✅ All API keys have been successfully moved to environment variables
-✅ Firebase authentication is working correctly
-✅ Application runs without errors
-✅ Security improved by removing hardcoded API keys from source code
+### Testing
+- [x] Test voice recording functionality
+- [x] Verify custom scenario input works properly
+- [x] Ensure session flow works with voice-only input
+
+## Progress:
+- [x] Analysis completed
+- [x] Plan approved by user
+- [x] Implementation completed

@@ -58,57 +58,67 @@ const Practice = () => {
 const ScenarioProfessional = () => {
   const navigate = useNavigate();
   const [scenario, setScenario] = useState("Interviews");
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Scenario Setup</CardTitle>
-          <CardDescription>Select a scenario, attach your resume, and paste the job description.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div>
-            <Label>Scenario</Label>
-            <Select defaultValue={scenario} onValueChange={setScenario}>
-              <SelectTrigger className="mt-2"><SelectValue placeholder="Select scenario" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Interviews">Interviews</SelectItem>
-                <SelectItem value="Stand-up Meetings">Stand-up Meetings</SelectItem>
-                <SelectItem value="Pitching Startups">Pitching Startups</SelectItem>
-                <SelectItem value="Custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="resumeFile">Resume (PDF or DOC/DOCX)</Label>
-            <Input id="resumeFile" type="file" accept=".pdf,.doc,.docx" />
-          </div>
-          <div className="md:col-span-2">
-            <Field id="jd" label="Job Description (paste)" placeholder="Paste text here" textarea />
-          </div>
-          <div className="md:col-span-2 flex gap-3">
-            <Button variant="hero" onClick={() => navigate(`/session?mode=practice&scenario=${encodeURIComponent(scenario)}`)}>Start Session</Button>
-            <Button variant="outline">Use Voice</Button>
-          </div>
-        </CardContent>
-      </Card>
+  const [customScenario, setCustomScenario] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stand-up Meeting</CardTitle>
-          <CardDescription>Enter your project summary and blockers.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <Field id="project" label="Project" placeholder="Feature name or initiative" />
-          <Field id="audience" label="Audience" placeholder="Team, leadership, cross-functional" />
-          <div className="md:col-span-2">
-            <Field id="summary" label="Summary" placeholder="What did you do? What's next? Any blockers?" textarea />
-          </div>
-          <div className="md:col-span-2">
-            <Button onClick={() => navigate(`/session?mode=practice&scenario=${encodeURIComponent("Stand-up Meetings")}`)}>Start Coaching</Button>
-          </div>
-        </CardContent>
-      </Card>
-    </>
+  const handleScenarioChange = (value: string) => {
+    setScenario(value);
+    setIsCustom(value === "Custom");
+    if (value !== "Custom") {
+      setCustomScenario("");
+    }
+  };
+
+  const getScenarioForSession = () => {
+    return isCustom && customScenario.trim() ? customScenario.trim() : scenario;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Scenario Setup</CardTitle>
+        <CardDescription>Select a scenario, attach your resume, and paste the job description.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label>Scenario</Label>
+          <Select defaultValue={scenario} onValueChange={handleScenarioChange}>
+            <SelectTrigger className="mt-2"><SelectValue placeholder="Select scenario" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Interviews">Interviews</SelectItem>
+              <SelectItem value="Stand-up Meetings">Stand-up Meetings</SelectItem>
+              <SelectItem value="Pitching Startups">Pitching Startups</SelectItem>
+              <SelectItem value="Custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+          {isCustom && (
+            <Input 
+              className="mt-2" 
+              placeholder="Type your custom scenario..." 
+              value={customScenario}
+              onChange={(e) => setCustomScenario(e.target.value)}
+            />
+          )}
+        </div>
+        <div>
+          <Label htmlFor="resumeFile">Resume (PDF or DOC/DOCX)</Label>
+          <Input id="resumeFile" type="file" accept=".pdf,.doc,.docx" />
+        </div>
+        <div className="md:col-span-2">
+          <Field id="jd" label="Job Description (paste)" placeholder="Paste text here" textarea />
+        </div>
+        <div className="md:col-span-2 flex gap-3">
+          <Button 
+            variant="hero" 
+            onClick={() => navigate(`/session?mode=practice&scenario=${encodeURIComponent(getScenarioForSession())}`)}
+            disabled={isCustom && !customScenario.trim()}
+          >
+            Start Session
+          </Button>
+          <Button variant="outline">Use Voice</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -132,7 +142,7 @@ const ScenarioCasual = () => {
       <Card>
         <CardHeader>
           <CardTitle>Make a New Friend</CardTitle>
-          <CardDescription>Enter your info, the event, and the kind of friend you’re looking for.</CardDescription>
+          <CardDescription>Enter your info, the event, and the kind of friend you're looking for.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Field id="you" label="About you" placeholder="Tell us about yourself" />

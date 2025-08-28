@@ -4,9 +4,9 @@ import JellyfishAvatar from "@/components/branding/JellyfishAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
+import { Mic, MicOff, Volume2 } from "lucide-react";
 
 const demoQuestions: Record<string, string[]> = {
   "Interviews": [
@@ -144,7 +144,11 @@ const Session = () => {
   const toggleMic = () => {
     const rec = recognitionRef.current;
     if (!rec) {
-      toast({ title: "Voice input unavailable", description: "Your browser doesn't support speech recognition. Type below instead." });
+      toast({ 
+        title: "Voice input unavailable", 
+        description: "Your browser doesn't support speech recognition. Please use a supported browser like Chrome or Edge.",
+        variant: "destructive"
+      });
       return;
     }
     if (isRecording) {
@@ -166,6 +170,12 @@ const onSend = () => {
       setIndex(index + 1);
       setTranscript("");
       setTimeLeft(30);
+      // Stop recording when moving to next question
+      if (isRecording) {
+        const rec = recognitionRef.current;
+        if (rec) rec.stop();
+        setIsRecording(false);
+      }
     } else {
       // Finish
       setStarted(false);
@@ -250,7 +260,14 @@ const onSend = () => {
             {!started ? (
               <Button className="w-full" onClick={() => { setStarted(true); speak(currentQuestion, voice); }}>Start</Button>
             ) : (
-              <Button variant={isRecording ? "destructive" : "outline"} className="w-full" onClick={toggleMic}>{isRecording ? "Stop Mic" : "Mic"}</Button>
+              <Button 
+                variant={isRecording ? "destructive" : "outline"} 
+                className="w-full" 
+                onClick={toggleMic}
+              >
+                {isRecording ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+                {isRecording ? "Stop Recording" : "Start Recording"}
+              </Button>
             )}
           </div>
         </CardContent>
@@ -267,11 +284,65 @@ const onSend = () => {
               {mode === "quiz" && <div className="text-sm text-muted-foreground">Time: {timeLeft}s</div>}
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea placeholder="Live transcription appears here (or type manually)" value={transcript} onChange={(e) => setTranscript(e.target.value)} className="min-h-[120px]" />
-            <div className="flex gap-3">
-              <Button onClick={() => speak(currentQuestion, voice)} variant="outline">Repeat</Button>
-              <Button onClick={onSend}>Send Response</Button>
+          <CardContent className="space-y-4">
+            {/* Voice Recording Status */}
+            <div className="flex items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
+              <div className="text-center space-y-4">
+                {isRecording ? (
+                  <>
+                    <div className="flex items-center justify-center">
+                      <Button
+                        onClick={toggleMic}
+                        size="lg"
+                        variant="destructive"
+                        className="h-20 w-20 rounded-full animate-pulse"
+                      >
+                        <Mic className="h-8 w-8" />
+                      </Button>
+                    </div>
+                    <p className="text-lg font-medium text-red-600">Recording...</p>
+                    <p className="text-sm text-muted-foreground">Click to stop recording</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center">
+                      <Button
+                        onClick={toggleMic}
+                        size="lg"
+                        variant="outline"
+                        className="h-20 w-20 rounded-full hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                      >
+                        <Mic className="h-8 w-8" />
+                      </Button>
+                    </div>
+                    <p className="text-lg font-medium">Ready to Record</p>
+                    <p className="text-sm text-muted-foreground">Click the microphone to start recording your answer</p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Live Transcript Display */}
+            {transcript && (
+              <div className="p-4 bg-secondary/50 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-2">Live Transcript:</p>
+                <p className="text-base">{transcript}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 justify-center">
+              <Button onClick={() => speak(currentQuestion, voice)} variant="outline">
+                <Volume2 className="mr-2 h-4 w-4" />
+                Repeat Question
+              </Button>
+              <Button 
+                onClick={onSend}
+                disabled={!transcript.trim()}
+                className="min-w-[120px]"
+              >
+                {index < 4 ? "Next Question" : "Finish Session"}
+              </Button>
             </div>
           </CardContent>
         </Card>
