@@ -194,32 +194,7 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="group transition-all duration-300 hover:shadow-xl">
-            <CardHeader>
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
-                🤝
-              </div>
-              <CardTitle className="text-2xl mb-2">Casual Mode</CardTitle>
-              <CardDescription className="text-base">
-                Build stronger relationships and navigate difficult conversations
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {[
-                  "Practice difficult conversations with friends and family",
-                  "Learn active listening and empathy techniques",
-                  "Get conversation starters for networking events",
-                  "Build confidence in social situations"
-                ].map((item, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-muted-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {/* Casual Mode removed */}
         </div>
       </section>
 

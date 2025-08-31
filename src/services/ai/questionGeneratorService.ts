@@ -67,6 +67,98 @@ export class QuestionGeneratorService {
     }
   }
 
+  /**
+   * Generate a single next question given the live session context and conversation history.
+   * This ensures every generated question includes the resume and job description when present
+   * and uses the last answers as context so the interviewer continues naturally.
+   */
+  async generateNextQuestion(context: SessionContext, history: Array<{question:string; response:string}> = []): Promise<GeneratedQuestion | null> {
+    try {
+      const safeContext = { ...context, resume: context.resume?.slice(0, 2000), jobDescription: context.jobDescription?.slice(0, 2000) };
+      const prompt = this.buildNextQuestionPrompt(safeContext, history);
+      const result = await this.callGenerateWithRetry(prompt, 3);
+      const text = result.response.text();
+
+      // parse expected single-question JSON object or wrapped object
+      try {
+        const direct = JSON.parse(text);
+        if (direct?.question) return direct as GeneratedQuestion;
+        if (direct?.questions && Array.isArray(direct.questions) && direct.questions.length > 0) return direct.questions[0];
+      } catch (e) {
+        // try to extract JSON object
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[0]);
+            if (parsed?.question) return parsed as GeneratedQuestion;
+            if (parsed?.questions && parsed.questions.length) return parsed.questions[0];
+          } catch (err) {
+            console.error('[QuestionGeneratorService] parse error for next question:', err);
+          }
+        }
+      }
+
+      console.warn('[QuestionGeneratorService] Raw AI response (could not parse single question):', text);
+      // fallback: competency-based question derived from job title or scenario
+      return this.getCompetencyFallback(context.scenario, context.jobDescription);
+    } catch (error) {
+      console.error('[QuestionGeneratorService] generateNextQuestion failed:', error);
+      return this.getCompetencyFallback(context.scenario, context.jobDescription);
+    }
+  }
+
+  private buildNextQuestionPrompt(context: SessionContext, history: Array<{question:string; response:string}>) {
+    // Use the last 5 QA pairs as context to keep prompt size reasonable
+    const recent = history.slice(-5);
+    const convo = recent.map((h, i) => `${i+1}. Q: ${h.question}\nA: ${h.response}`).join('\n');
+
+    return `You are an expert interviewer conducting a realistic, contextual interview.\n\n` +
+      `${context.resume ? `CANDIDATE RESUME:\n${context.resume}\n\n` : ''}` +
+      `${context.jobDescription ? `JOB DESCRIPTION:\n${context.jobDescription}\n\n` : ''}` +
+      `SCENARIO: ${context.scenario}\n` +
+      (context.userProfile?.experience ? `CANDIDATE EXPERIENCE: ${context.userProfile.experience}\n` : '') +
+      `CONVERSATION HISTORY (most recent first):\n${convo || '(no prior Q/A)'}\n\n` +
+      `Task: Based on the candidate resume, job description, and the recent answers above, generate ONE follow-up interview question that flows naturally from the previous answer(s). The question should probe for competency or specifics relevant to the role and the candidate's background. Avoid generic openers like "Tell me about yourself." If you cannot find role- or resume-specific hooks, generate a competency-based question related to the role (for example leadership, prioritization, problem solving) rather than a generic intro.\n\n` +
+      `Return ONLY a single JSON object, exactly parseable. Example:\n` +
+      `{
+  "question": "Describe a time you led a cross-functional team to deliver a project under a tight deadline. What was your role and the outcome?",
+  "category": "leadership",
+  "difficulty": "medium",
+  "expectedElements": ["description of leadership actions","stakeholder management","measured outcome"],
+  "followUpQuestions": ["How did you prioritize tasks?","What would you do differently?"]
+}
+\n` +
+      `IMPORTANT: Output must be VALID JSON and nothing else.`;
+  }
+
+  private getCompetencyFallback(scenario: string, jobDescription?: string): GeneratedQuestion {
+    // Use job description keywords if present to pick a competency; otherwise default to behavioral leadership
+    const jd = (jobDescription || '').toLowerCase();
+    if (jd.includes('manager') || jd.includes('lead') || jd.includes('team')) {
+      return {
+        question: 'Describe a time you led a team to deliver a project. What challenges did you face and how did you resolve them?',
+        category: 'leadership',
+        difficulty: 'medium',
+        expectedElements: ['context', 'actions taken', 'outcome']
+      };
+    }
+    if (jd.includes('engineer') || jd.includes('technical') || jd.includes('python') || jd.includes('react')) {
+      return {
+        question: 'Describe a technically challenging problem you solved. What was the root cause and how did you address it?',
+        category: 'technical',
+        difficulty: 'medium',
+        expectedElements: ['problem description', 'approach', 'measured impact']
+      };
+    }
+    // generic competency fallback
+    return {
+      question: 'Describe a time you had to prioritize conflicting demands. How did you decide and what was the result?',
+      category: 'problem-solving',
+      difficulty: 'medium',
+      expectedElements: ['criteria used','decision','outcome']
+    };
+  }
+
   private buildQuestionPrompt(context: SessionContext, numQuestions: number): string {
     return `
     You are an expert interviewer. Generate ${numQuestions} personalized interview questions for a ${context.scenario} scenario.
