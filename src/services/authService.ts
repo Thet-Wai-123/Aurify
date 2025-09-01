@@ -40,3 +40,5 @@ export async function aurifySignUp(email: string, password: string): Promise<Use
 }
 
 export const AURIFY_GUEST: string = "aurify_guest" as const;
+
+
