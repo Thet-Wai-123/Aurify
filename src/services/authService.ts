@@ -10,12 +10,12 @@ export class PasswordError extends Error {
   // We also make this readonly because why would the property need to be modified (makes it like a const var)
   // Also this way we can use this for the login page :)
   readonly validationStatus: Omit<PasswordValidationStatus, 'isValid' | 'passwordPolicy'>
-    constructor(validationStatus: Omit<PasswordValidationStatus, 'isValid' | 'passwordPolicy'>) {
+  constructor(validationStatus: Omit<PasswordValidationStatus, 'isValid' | 'passwordPolicy'>) {
     super(`Password is not valid!:\n
       ${Object.entries(validationStatus)
         // We want to filter out values that aren't covered by policy 
         // TODO: Does even work with different policies?
-        .filter(([_,value]) => value === false)
+        .filter(([_, value]) => value === false)
         // Break this into key: value pairs, because verbosity isn't needed
         .map(([key, value]) => `${key}: ${value}`).join('\n')}\n
       `);
