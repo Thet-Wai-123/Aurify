@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, Persistence } from "firebase/auth";
 import { createUserProfile, getUserProfile, setCurrentUser } from "@/services/profileService";
 
 // Your web app's Firebase configuration using environment variables
