@@ -3,7 +3,8 @@
 // 
 
 import { auth } from "@/lib/firebase"
-import { createUserWithEmailAndPassword, PasswordValidationStatus, signInWithEmailAndPassword, User, validatePassword } from "firebase/auth"
+import { FirebaseError } from "firebase/app";
+import { createUserWithEmailAndPassword, PasswordValidationStatus, Persistence, setPersistence, signInWithEmailAndPassword, User, validatePassword } from "firebase/auth"
 
 export class PasswordError extends Error {
   // We omit these keys because they aren't neccessary for this error type
@@ -23,20 +24,36 @@ export class PasswordError extends Error {
   }
 }
 
-export async function aurifySignIn(email: string, password: string): Promise<User> {
-  const userCreds = await signInWithEmailAndPassword(auth, email, password);
-  return userCreds.user;
+export async function aurifySignIn(email: string, password: string, persistance: Persistence = { type: "LOCAL" }): Promise<User> {
+  try {
+    setPersistence(auth, persistance);
+    const userCreds = await signInWithEmailAndPassword(auth, email, password);
+    return userCreds.user;
+  } catch (e: any) {
+    if (e instanceof FirebaseError) {
+      console.log(`Can't sign in for: ${email} : ${password}`);
+    }
+    throw e;
+  }
 }
 
-export async function aurifySignUp(email: string, password: string): Promise<User> {
+export async function aurifySignUp(email: string, password: string, persistance: Persistence = { type: "LOCAL" }): Promise<User> {
   // Check if passord matches current firebase password config
-  const passwordValidationState = await validatePassword(auth, password);
-  if (!passwordValidationState.isValid) {
-    // If password can't be used
-    throw new PasswordError(passwordValidationState);
+  try {
+    await setPersistence(auth, persistance);
+    const passwordValidationState = await validatePassword(auth, password);
+    if (!passwordValidationState.isValid) {
+      // If password can't be used
+      throw new PasswordError(passwordValidationState);
+    }
+    const userCreds = await createUserWithEmailAndPassword(auth, email, password);
+    return userCreds.user;
+  } catch (e: any) {
+    if (e instanceof FirebaseError) {
+      console.log(`Can't sign up for: ${email} : ${password}`);
+    }
+    throw e;
   }
-  const userCreds = await createUserWithEmailAndPassword(auth, email, password);
-  return userCreds.user;
 }
 
 export const AURIFY_GUEST: string = "aurify_guest" as const;
