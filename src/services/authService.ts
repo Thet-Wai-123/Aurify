@@ -5,6 +5,7 @@
 import { auth } from "@/lib/firebase"
 import { FirebaseError } from "firebase/app";
 import { createUserWithEmailAndPassword, PasswordValidationStatus, Persistence, setPersistence, signInWithEmailAndPassword, User, validatePassword } from "firebase/auth"
+import { createUserProfile, getUserProfile, setCurrentUser } from "@/services/profileService";
 
 export class PasswordError extends Error {
   // We omit these keys because they aren't neccessary for this error type
@@ -58,4 +59,22 @@ export async function aurifySignUp(email: string, password: string, persistance:
 
 export const AURIFY_GUEST: string = "aurify_guest" as const;
 
+auth.onAuthStateChanged(async (user) => { // Is called when user is signed in/out
+  if (user) { // User is signed in
+    console.debug("HELLO ", user.uid);
+    try {
+      let userProfile = await getUserProfile(user.uid);
+      if (userProfile === null) {
+        userProfile = await createUserProfile(user.uid, {
+          displayName: user.displayName,
+          profilePicture: user.photoURL,
+        });
+      }
+      setCurrentUser(userProfile);
+    } catch (e: any) {
+      console.error("UH OH: ", e)
+    }
+  } else { // User is signed out
 
+  }
+});

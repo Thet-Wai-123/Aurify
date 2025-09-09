@@ -3,7 +3,6 @@ import { initializeApp } from "firebase/app";
 import { initializeFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, Persistence } from "firebase/auth";
-import { createUserProfile, getUserProfile, setCurrentUser } from "@/services/profileService";
 
 // Your web app's Firebase configuration using environment variables
 const firebaseConfig = {
@@ -24,24 +23,3 @@ export const googleProvider = new GoogleAuthProvider();
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true, // Because of unknown SID issues
 });
-
-auth.onAuthStateChanged(async (user) => { // Is called when user is signed in/out
-  if (user) { // User is signed in
-    console.debug("HELLO ", user.uid);
-    try {
-      let userProfile = await getUserProfile(user.uid);
-      if (userProfile === null) {
-        userProfile = await createUserProfile(user.uid, {
-          displayName: user.displayName,
-          profilePicture: user.photoURL,
-        });
-      }
-      setCurrentUser(userProfile);
-    } catch (e: any) {
-      console.error("UH OH: ", e)
-    }
-  } else { // User is signed out
-
-  }
-});
-
