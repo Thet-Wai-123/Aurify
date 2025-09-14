@@ -27,6 +27,10 @@ const speak = (text: string) => {
   window.speechSynthesis.speak(u);
 };
 
+// NEW: safely extract text from either string or object response shapes
+const getResponseText = (r: SavedResponse) =>
+  typeof r === "string" ? r : (r.response ?? r.question ?? "");
+
 const History = () => {
   useSEO({ title: "History – Aurify", description: "Review past practice sessions with transcripts, scores, and replay." });
   const { toast } = useToast();
@@ -102,16 +106,36 @@ const History = () => {
                 ))}
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button variant="outline" onClick={() => speak(it.responses.join(". "))}>Replay (TTS)</Button>
-                <Button onClick={() => setExpanded(expanded === it.id ? null : it.id)}>{expanded === it.id ? "Hide Details" : "View Details"}</Button>
-                <Button variant="ghost" onClick={() => { const next = items.filter(x => x.id !== it.id); localStorage.setItem("aurify_history", JSON.stringify(next)); setItems(next); toast({ title: "Deleted", description: "Session removed from history." }); }}>Delete</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const toSpeak = it.responses.map(getResponseText).filter(Boolean).join(". ");
+                    speak(toSpeak);
+                  }}
+                >
+                  Replay (TTS)
+                </Button>
+                <Button onClick={() => setExpanded(expanded === it.id ? null : it.id)}>
+                  {expanded === it.id ? "Hide Details" : "View Details"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const next = items.filter(x => x.id !== it.id);
+                    localStorage.setItem("aurify_history", JSON.stringify(next));
+                    setItems(next);
+                    toast({ title: "Deleted", description: "Session removed from history." });
+                  }}
+                >
+                  Delete
+                </Button>
               </div>
               {expanded === it.id && (
                 <div className="mt-4 rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">Coach: {it.coachName} · Voice: {it.voice}</p>
                   <ol className="mt-2 list-decimal space-y-2 pl-4 text-sm">
                     {it.responses.map((r, idx) => {
-                      const text = typeof r === 'string' ? r : (r.response || r.question || '');
+                      const text = getResponseText(r);
                       return (
                         <li key={idx}><span className="font-medium">Q{idx + 1}:</span> {text}</li>
                       );
