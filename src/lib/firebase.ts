@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { initializeFirestore } from "firebase/firestore";
+import { collection, CollectionReference, initializeFirestore, Timestamp } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, Persistence } from "firebase/auth";
 import { createUserProfile, getUserProfile, setCurrentUser } from "@/services/profileService";
@@ -45,3 +45,10 @@ auth.onAuthStateChanged(async (user) => { // Is called when user is signed in/ou
   }
 });
 
+export interface CollectionBaseImpl {
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+
+// References 
+export const usersRef: CollectionReference = collection(db, "users");
