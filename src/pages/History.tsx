@@ -115,9 +115,7 @@ const History = () => {
                 >
                   Replay (TTS)
                 </Button>
-                <Button onClick={() => setExpanded(expanded === it.id ? null : it.id)}>
-                  {expanded === it.id ? "Hide Details" : "View Details"}
-                </Button>
+                <Button onClick={() => setExpanded(expanded === it.id ? null : it.id)}>{expanded === it.id ? "Hide Details" : "View Details"}</Button>
                 <Button
                   variant="ghost"
                   onClick={() => {

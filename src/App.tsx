@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
@@ -19,7 +19,7 @@ import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Session from "./pages/Session";
-import DashboardPage from "@/pages/Dashboard";
+import DashboardPage from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -38,9 +38,8 @@ const AppInner = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/login" element={<Login />} />
         <Route path="/session" element={<Session />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="/dashboard" element={<DashboardPage />} />  {/* ✅ added */}
+        {/* catch-all route */}
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Footer />
