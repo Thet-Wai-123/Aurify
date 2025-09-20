@@ -63,9 +63,9 @@ export const postBookingSession = async ({ startTime, endTime, service }: Bookin
       service: service,
     };
 
-    await addDoc(collection(db, BOOKINGS_COLLECTION), {
+    await addDoc(collection(db, BOOKINGS_COLLECTION), 
       booking,
-    });
+    );
   } catch (e) {
     console.error("Error adding booking session: ", e);
   }
