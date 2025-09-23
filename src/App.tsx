@@ -19,6 +19,7 @@ import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Session from "./pages/Session";
+import DashboardPage from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,8 @@ const AppInner = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/login" element={<Login />} />
         <Route path="/session" element={<Session />} />
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="/dashboard" element={<DashboardPage />} />  {/* ✅ added */}
+        {/* catch-all route */}
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Footer />
