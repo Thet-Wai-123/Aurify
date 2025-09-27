@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { initializeFirestore } from "firebase/firestore";
+import { collection, CollectionReference, initializeFirestore, Timestamp } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, Persistence } from "firebase/auth";
 
@@ -23,3 +23,11 @@ export const googleProvider = new GoogleAuthProvider();
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true, // Because of unknown SID issues
 });
+
+export interface CollectionBaseImpl {
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+
+// References 
+export const usersRef: CollectionReference = collection(db, "users");

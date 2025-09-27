@@ -1,5 +1,5 @@
-import { db } from "@/lib/firebase";
-import { collection, CollectionReference, deleteDoc, doc, FirestoreError, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { CollectionBaseImpl, db, usersRef } from "@/lib/firebase";
+import { collection, CollectionReference, deleteDoc, doc, FirestoreError, getDoc, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 
 export const enum VOICE_TYPES {
   MALE = "male",
@@ -16,10 +16,11 @@ export const DEFAULT_USER_PROFILE: Readonly<UserProfile> = {
   goals: [],
   resumeFile: "", // Yeah I don't think I can store files here
   jellyfishName: "Auri",
-  voice: VOICE_TYPES.ANIMAL
+  voice: VOICE_TYPES.ANIMAL,
+  createdAt: Timestamp.now(),
+  updatedAt: Timestamp.now()
 } as const;
 
-const usersRef: CollectionReference = collection(db, "users");
 let currentUserRef: UserProfile | null = null;
 
 export const setCurrentUser = (user: UserProfile | null) => {
@@ -29,7 +30,7 @@ export const setCurrentUser = (user: UserProfile | null) => {
 export const getCurrentUser = (): Readonly<UserProfile> => currentUserRef;
 
 
-export interface UserProfile {
+export interface UserProfile extends CollectionBaseImpl {
   displayName: string,
   username: string,
   bio: string,
@@ -39,7 +40,7 @@ export interface UserProfile {
   goals: string[],
   resumeFile: URL | string, // Yeah I don't think I can store files here
   jellyfishName: string,
-  voice: VOICE_TYPES
+  voice: VOICE_TYPES,
 }
 
 // TODO: Should I keep this?
@@ -145,7 +146,10 @@ export const getUserProfile = async (uid: string): Promise<Readonly<UserProfile>
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
   const docRef = doc(usersRef, uid);
   try {
-    await updateDoc(docRef, data);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: Timestamp.now()
+    } as Partial<UserProfile>);
   } catch (e: any) {
     // TODO: Make this fail more elegantly.
     console.error("Cannot update userProfile!");
