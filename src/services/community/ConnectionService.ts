@@ -1,14 +1,12 @@
 /**
  * ConnectionService manages friend requests, connections, and user relationship status.
- * 
+ *
  * It handles all social relationships between users. Friend requests, Connections, Blocking/unblocking users
  *
  */
 
 import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, getDoc, getDocs, deleteDoc, query, where, updateDoc, FirestoreError} from "firebase/firestore";
-
-
+import { collection, addDoc, doc, getDoc, getDocs, deleteDoc, query, where, updateDoc, FirestoreError } from "firebase/firestore";
 
 /**
  * Firestore Data Shapes
@@ -49,53 +47,31 @@ const REQUESTS_COLLECTION = "friendRequests";
 const CONNECTIONS_COLLECTION = "connections";
 const BLOCKS_COLLECTION = "blocks";
 
-
-
 /* Helper utilities:
  * Check whether userId has blocked otherUserId.
  * Uses a Firestore query with two where() filters.
  */
-export const isBlocked = async (
-  userId: string,
-  otherUserId: string
-): Promise<boolean> => {
-  const q = query(
-    collection(db, BLOCKS_COLLECTION),
-    where("blockerId", "==", userId),
-    where("blockedId", "==", otherUserId)
-  );
+export const isBlocked = async (userId: string, otherUserId: string): Promise<boolean> => {
+  const q = query(collection(db, BLOCKS_COLLECTION), where("blockerId", "==", userId), where("blockedId", "==", otherUserId));
 
-  const snap = await getDocs(q);
-  return !snap.empty; 
-};
-
-
-/**
- * Check whether two users are connected.
- */
-export const isConnected = async (
-  userId: string,
-  friendId: string
-): Promise<boolean> => {
-  const q = query(
-    collection(db, CONNECTIONS_COLLECTION),
-    where("userId", "==", userId),
-    where("friendId", "==", friendId)
-  );
   const snap = await getDocs(q);
   return !snap.empty;
 };
 
-
+/**
+ * Check whether two users are connected.
+ */
+export const isConnected = async (userId: string, friendId: string): Promise<boolean> => {
+  const q = query(collection(db, CONNECTIONS_COLLECTION), where("userId", "==", userId), where("friendId", "==", friendId));
+  const snap = await getDocs(q);
+  return !snap.empty;
+};
 
 /**
  * Block a user.
  * Creates a block document and removes any existing connections both ways.
  */
-export const blockUser = async (
-  blockerId: string,
-  blockedId: string
-): Promise<void> => {
+export const blockUser = async (blockerId: string, blockedId: string): Promise<void> => {
   if (blockerId === blockedId) {
     throw new Error("You cannot block yourself.");
   }
@@ -128,24 +104,16 @@ export const blockUser = async (
  * Unblock a user.
  * Deletes the block document if one exists.
  */
-export const unblockUser = async (
-  blockerId: string,
-  blockedId: string
-): Promise<void> => {
-  const q = query(
-    collection(db, BLOCKS_COLLECTION),
-    where("blockerId", "==", blockerId),
-    where("blockedId", "==", blockedId)
-  );
+export const unblockUser = async (blockerId: string, blockedId: string): Promise<void> => {
+  const q = query(collection(db, BLOCKS_COLLECTION), where("blockerId", "==", blockerId), where("blockedId", "==", blockedId));
 
   const snap = await getDocs(q);
-  if (snap.empty) return; 
+  if (snap.empty) return;
 
   for (const docSnap of snap.docs) {
     await deleteDoc(doc(db, BLOCKS_COLLECTION, docSnap.id));
   }
 };
-
 
 /**
  * Friend Request:
@@ -156,24 +124,17 @@ export const unblockUser = async (
  * Cannot send another request while one is already pending
  * If the other user already sent a pending request, reject.
  */
-export const sendFriendRequest = async (
-  fromUserId: string,
-  toUserId: string
-): Promise<void> => {
+export const sendFriendRequest = async (fromUserId: string, toUserId: string): Promise<void> => {
   if (fromUserId === toUserId) {
     throw new Error("Users cannot send requests to themselves.");
   }
 
-  
-  if (
-    (await isBlocked(fromUserId, toUserId)) ||
-    (await isBlocked(toUserId, fromUserId))
-  ) {
+  if ((await isBlocked(fromUserId, toUserId)) || (await isBlocked(toUserId, fromUserId))) {
     throw new Error("Cannot send request: user is blocked.");
   }
 
   try {
-    // Check if a pending request already exists 
+    // Check if a pending request already exists
     const q = query(
       collection(db, REQUESTS_COLLECTION),
       where("fromUserId", "==", fromUserId),
@@ -216,10 +177,7 @@ export const sendFriendRequest = async (
  * Cancel a sent friend request.
  * Only possible if it is still pending.
  */
-export const cancelFriendRequest = async (
-  fromUserId: string,
-  toUserId: string
-): Promise<void> => {
+export const cancelFriendRequest = async (fromUserId: string, toUserId: string): Promise<void> => {
   const q = query(
     collection(db, REQUESTS_COLLECTION),
     where("fromUserId", "==", fromUserId),
@@ -228,7 +186,7 @@ export const cancelFriendRequest = async (
   );
 
   const snap = await getDocs(q);
-  if (snap.empty) return; 
+  if (snap.empty) return;
 
   for (const docSnap of snap.docs) {
     await deleteDoc(doc(db, REQUESTS_COLLECTION, docSnap.id));
@@ -251,10 +209,9 @@ export const acceptFriendRequest = async (requestId: string): Promise<void> => {
     throw new Error("Friend request is not pending.");
   }
 
-
   await updateDoc(reqRef, { status: "accepted" });
 
-  // Create two connection docs 
+  // Create two connection docs
   await addDoc(collection(db, CONNECTIONS_COLLECTION), {
     userId: reqData.fromUserId,
     friendId: reqData.toUserId,
@@ -291,15 +248,8 @@ export const rejectFriendRequest = async (requestId: string): Promise<void> => {
 /**
  * Remove a connection.
  */
-export const removeConnection = async (
-  userId: string,
-  friendId: string
-): Promise<void> => {
-  const q = query(
-    collection(db, CONNECTIONS_COLLECTION),
-    where("userId", "==", userId),
-    where("friendId", "==", friendId)
-  );
+export const removeConnection = async (userId: string, friendId: string): Promise<void> => {
+  const q = query(collection(db, CONNECTIONS_COLLECTION), where("userId", "==", userId), where("friendId", "==", friendId));
 
   const snap = await getDocs(q);
   if (snap.empty) return;
@@ -309,18 +259,12 @@ export const removeConnection = async (
   }
 };
 
-
 /*
- * Query helpers: 
+ * Query helpers:
  * Get all of a user’s connections (friends list).
  */
-export const getConnections = async (
-  userId: string
-): Promise<Connection[]> => {
-  const q = query(
-    collection(db, CONNECTIONS_COLLECTION),
-    where("userId", "==", userId)
-  );
+export const getConnections = async (userId: string): Promise<Connection[]> => {
+  const q = query(collection(db, CONNECTIONS_COLLECTION), where("userId", "==", userId));
 
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({
@@ -333,14 +277,8 @@ export const getConnections = async (
 /**
  * Get all pending friend requests addressed to a user.
  */
-export const getPendingRequests = async (
-  userId: string
-): Promise<FriendRequest[]> => {
-  const q = query(
-    collection(db, REQUESTS_COLLECTION),
-    where("toUserId", "==", userId),
-    where("status", "==", "pending")
-  );
+export const getPendingRequests = async (userId: string): Promise<FriendRequest[]> => {
+  const q = query(collection(db, REQUESTS_COLLECTION), where("toUserId", "==", userId), where("status", "==", "pending"));
 
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({
@@ -349,5 +287,3 @@ export const getPendingRequests = async (
     createdAt: d.data().createdAt?.toDate?.() || new Date(),
   }));
 };
-
-
