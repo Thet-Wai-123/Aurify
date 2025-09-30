@@ -1,0 +1,1 @@
+export const BOOKINGS_COLLECTION = "bookings";

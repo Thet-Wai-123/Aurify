@@ -6,20 +6,8 @@
 //   scheduledSessions: arrayUnion(newDocRef.id)
 // })
 import { auth, db } from "@/lib/firebase";
-import {
-  addDoc,
-  arrayRemove,
-  arrayUnion,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  or,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, or, query, updateDoc, where } from "firebase/firestore";
+import { BOOKINGS_COLLECTION } from "shared/firebaseCollectionPath";
 
 export enum ServiceType {
   Interview,
@@ -49,8 +37,6 @@ interface BookingSearchParams {
   service: ServiceType;
 }
 
-const BOOKINGS_COLLECTION = "bookings";
-
 export const postBookingSession = async ({ startTime, endTime, service }: BookingFormInput) => {
   const user = auth.currentUser;
   try {
@@ -63,9 +49,7 @@ export const postBookingSession = async ({ startTime, endTime, service }: Bookin
       service: service,
     };
 
-    await addDoc(collection(db, BOOKINGS_COLLECTION), 
-      booking,
-    );
+    await addDoc(collection(db, BOOKINGS_COLLECTION), booking);
   } catch (e) {
     console.error("Error adding booking session: ", e);
   }
@@ -83,10 +67,7 @@ export const deleteBookingSession = async (sessionId: string) => {
 export const getCurUserScheduledSessions = async () => {
   try {
     const user = auth.currentUser;
-    const q = query(
-      collection(db, BOOKINGS_COLLECTION),
-      or(where("owner", "==", user.uid), where("participantIds", "array-contains", user.uid))
-    );
+    const q = query(collection(db, BOOKINGS_COLLECTION), or(where("owner", "==", user.uid), where("participantIds", "array-contains", user.uid)));
     const snap = await getDocs(q);
 
     const results: BookingSession[] = snap.docs.map((doc) => ({
