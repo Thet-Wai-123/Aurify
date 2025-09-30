@@ -1,9 +1,12 @@
 import * as admin from "firebase-admin";
 
-const projectId = "aurify-test"
+const projectId = "aurify-test";
 process.env.GLOUD_PROJECT = projectId;
 process.env.FIRESTORE_EMULATOR_HOST = "local:8080";
 admin.initializeApp();
+const db = admin.firestore();
+
+export { db };
 
 export interface FcmMessageInterface {
   token: string;
