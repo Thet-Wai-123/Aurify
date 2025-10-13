@@ -20,7 +20,7 @@ Troubleshooting
 -Check the translated index.js inside lib/functions/index.js matches with package.json, "main": "lib/functions/index.js"
 -Debugger doesn't work?
 -a few properties about FMC token, you can only send to legit tokens generated, otherwise it'll say permission denied.
-
+-The token must be legit, and created by firebase, if you just pass in a random token without the user existing, it'll be error.
 
 Todo
 -set up test cases for security rules, firebase functions
