@@ -9,6 +9,11 @@ npm run build:watch
 firebase emulators:start
 
 
+Testing (make sure to run the firebase emulator from above)
+
+npm run test
+
+
 URL 
 http://127.0.0.1:5001/demo-no-project/us-central1/FUNCTION_NAME
 (Note that it says demo-no-project, so this might change depending on your firebase init setup. If you skip to set firebase project, it'll default to this. Otherwise replace)

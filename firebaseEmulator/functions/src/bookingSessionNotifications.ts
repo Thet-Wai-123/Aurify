@@ -49,10 +49,9 @@ export const bookingSessionNotifications = {
   }),
 
   // 10 min reminder
-  // how to set a specific time when we need to retrieve from firestore first?
   // sendSessionReminder: firestore.onDocumentCreated(`Bookings/{sessionId}`, async(event) =>{
   //   const startTime = event.data?.data().startTime;
-  //   onSchedule()
+    
 
   // })
 };
