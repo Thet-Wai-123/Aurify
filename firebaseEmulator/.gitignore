@@ -1,3 +1,8 @@
+# Include firebase config for emulator
+!.firebaserc
+!firebase.json
+!firestore.rules
+
 # Logs
 logs
 *.log
