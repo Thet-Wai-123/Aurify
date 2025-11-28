@@ -1,7 +1,8 @@
 import { firestore } from "firebase-functions";
-import { FcmPayloadInterface, sendMultipleNotifications, sendSingleNotification } from "./notificationServiceHelper";
+import { FcmPayloadInterface, multicastNotifications, sendMultipleNotifications, sendSingleNotification } from "./notificationServiceHelper";
 import { onRequest } from "firebase-functions/https";
 import { db } from ".";
+import { queuePostAtSpecifiedTime } from "./cloudTasks";
 // import { onSchedule } from "firebase-functions/scheduler";
 
 export const bookingSessionNotifications = {
@@ -17,19 +18,17 @@ export const bookingSessionNotifications = {
     }
   }),
 
-  sendBookingRequestNotification: firestore.onDocumentUpdated(`Bookings/{sessionId}`, async (event) => {
+  sendBookingRequestNotification: firestore.onDocumentUpdated(`bookings/{sessionId}`, async (event) => {
     const newValue = event.data?.after.data();
     const oldValue = event.data?.before.data();
     if (oldValue && newValue) {
-      const addedUserIds = (newValue.participantIds || []).filter((id: string) => !(oldValue.participantIds || []).includes(id));
+      const addedUserIds = (newValue.requests || []).filter((id: string) => !(oldValue.requests || []).includes(id));
       //If a change was notified for other update and not new user, then don't worry.
       if (addedUserIds.length == 0) return;
-
       // Get the owner's FCM token to notify the owner
-      const ownerId = newValue.ownerId;
-      if (!ownerId) return;
+      const owner = newValue.owner;
 
-      const ownerSnap = await db.collection("users").doc(ownerId).get();
+      const ownerSnap = await db.collection("users").doc(owner).get();
       const ownerData = ownerSnap.data();
 
       if (!ownerData?.fcmToken) return;
@@ -47,11 +46,26 @@ export const bookingSessionNotifications = {
       sendSingleNotification(ownerData.fcmToken, fcmMessage);
     }
   }),
+  
+  // This sends the reminder, should only be called by the Google Cloud Tasks that will call at a scheduled time
+  sendSessionReminder: onRequest(async (request, response) => {
+    try {
+      const data = request.body;
+      const payload: FcmPayloadInterface = {
+        notification: {
+          title: "Meeting starts in 10 minutes",
+        },
+      };
+      multicastNotifications(data.tokens, payload);
+      response.status(200).send("Notification Request Processed");
+    } catch (error) {
+      response.status(500).send("Failed to process notification request");
+    }
+  }),
 
-  // 10 min reminder
-  // sendSessionReminder: firestore.onDocumentCreated(`Bookings/{sessionId}`, async(event) =>{
-  //   const startTime = event.data?.data().startTime;
-    
-
-  // })
+  queueSessionReminder: firestore.onDocumentCreated(`Bookings/{sessionId}`, async (event) => {
+    const startTime = event.data?.data().startTime;
+    const reminderTime = new Date(startTime.getTime() - 10 * 60 * 1000);
+    queuePostAtSpecifiedTime(reminderTime, "sendSessionReminder");
+  }),
 };
