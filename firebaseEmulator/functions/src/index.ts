@@ -11,4 +11,5 @@ export const db = admin.firestore();
 
 exports.sendFeedbackNotification = bookingSessionNotifications.sendFeedbackNotification;
 exports.sendBookingRequestNotification = bookingSessionNotifications.sendBookingRequestNotification;
-// export const sendSessionReminder = bookingSessionNotifications.sendSessionReminder;
+exports.sendSessionReminder = bookingSessionNotifications.sendSessionReminder;
+exports.queueSessionReminder = bookingSessionNotifications.queueSessionReminder;
