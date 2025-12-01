@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 
-const projectId = "demo-no-project";
-process.env.GCLOUD_PROJECT = projectId;
+const projectId = "demo-myapp";
+process.env.GCLOUD_PRJECT = projectId;
 process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
 
 // Make sure to have a running emulator beforehand, this connects to the firebase SDK to access that emulator.
@@ -14,25 +14,51 @@ beforeAll(async () => {
   await admin.firestore().recursiveDelete(admin.firestore().collection("bookings"));
 
   const users = [
-    { name: "Alice", age: 28, fcmToken: "token_1" },
+    { name: "Alice", age: 70, fcmToken: "token_1" },
     { name: "Bob", age: 35, fcmToken: "token_2" },
     { name: "Charlie", age: 42, fcmToken: "token_3" },
   ];
 
+  //store created user doc IDs
+  const userIds: string[] = [];
+
   for (const user of users) {
-    await db.collection("users").add(user);
+    const docRef = await db.collection("users").add(user);
+    userIds.push(docRef.id);
   }
 
-  // time might not parse correctly, double check
-  const bookingSessions = [{ owner: 1, startTime: "16:24:00" }];
+  const bookingSessions = [
+    {
+      sessionName: "Session 1",
+      owner: userIds[0],
+      participantIds: [],
+      status: "open",
+      startTime: "2025-11-24 00:24:55 UTC",
+      endTime: "2025-11-24 01:24:55 UTC",
+      service: "",
+      requests: [],
+    },
+  ];
 
   for (const bookingSession of bookingSessions) {
     await db.collection("bookings").add(bookingSession);
   }
 });
 
-describe("BookingSession", () => {
-  it("Notification Testing", async () => {
+// Need to set up actual FCM in client side and use that to complete integration test, for now we can see that it gets triggered through the console
+describe("Booking Session Notifications", () => {
+  // Update a field in collection -> triggers firebase function -> sends FCM request
+  it("Testing sendBookingRequestNotification function triggers when requests field is updated", async () => {
+    const snapshot = await db.collection("bookings").where("sessionName", "==", "Session 1").get();
+    await Promise.all(
+      snapshot.docs.map((doc) =>
+        doc.ref.update({
+          requests: admin.firestore.FieldValue.arrayUnion({ requests: "ID of a user" }),
+        })
+      )
+    );
 
+    // Take into consideration the race condition for the trigger to happen
+    await new Promise((r) => setTimeout(r, 3000));
   });
 });

@@ -6,7 +6,7 @@
 # Run
 In 2 seperate terminals, run these:   
 ```npm run build:watch```   
-```firebase emulators:start --project=demo-myapp```
+```npm run emulator```
 
 ### Calling the firebase functions
 This is only for firebase http request triggers.   
@@ -18,6 +18,10 @@ http://127.0.0.1:5001/demo-no-project/us-central1/FUNCTION_NAME
 ## Test cases 
 (make sure emulator is running)   
 ```npm run test```
+
+Or
+
+```npm run emulatorAndTest``` (If you want to run both emulator and test in same terminal)
 
 
 Troubleshooting

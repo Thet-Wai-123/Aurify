@@ -1,10 +1,10 @@
-import * as admin from "firebase-admin"
+import * as admin from "firebase-admin";
 
 export interface FcmPayloadInterface {
   data?: Record<string, string>; // optional key-value data
-  notification?: {
+  notification: {
     title: string;
-    body: string;
+    body?: string;
   };
 }
 
