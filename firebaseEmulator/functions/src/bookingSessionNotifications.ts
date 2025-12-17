@@ -3,6 +3,7 @@ import { FcmPayloadInterface, multicastNotifications, sendMultipleNotifications,
 import { onRequest } from "firebase-functions/https";
 import { db } from ".";
 import { queuePostAtSpecifiedTime } from "./cloudTasks";
+
 // import { onSchedule } from "firebase-functions/scheduler";
 
 export const bookingSessionNotifications = {
@@ -46,7 +47,7 @@ export const bookingSessionNotifications = {
       sendSingleNotification(ownerData.fcmToken, fcmMessage);
     }
   }),
-  
+
   // This sends the reminder, should only be called by the Google Cloud Tasks that will call at a scheduled time
   sendSessionReminder: onRequest(async (request, response) => {
     try {
@@ -65,7 +66,10 @@ export const bookingSessionNotifications = {
 
   queueSessionReminder: firestore.onDocumentCreated(`Bookings/{sessionId}`, async (event) => {
     const startTime = event.data?.data().startTime;
-    const reminderTime = new Date(startTime.getTime() - 10 * 60 * 1000);
-    queuePostAtSpecifiedTime(reminderTime, "sendSessionReminder");
+    const formattedStartTime = new Date(startTime);
+
+    // subtracting 10 min
+    const reminderTime = new Date(formattedStartTime.getTime() - 10 * 60 * 1000);
+    await queuePostAtSpecifiedTime(reminderTime, "sendSessionReminder");
   }),
 };

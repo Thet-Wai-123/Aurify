@@ -6,6 +6,8 @@ const location = process.env.LOCATION as string;
 const url = process.env.CLOUD_FUNCTION_BASE_URL as string;
 
 export async function queuePostAtSpecifiedTime(time: Date, functionName: String) {
+  console.log(project, queue, location, url);
+  
   const client = new CloudTasksClient();
 
   const parent = client.queuePath(project, location, queue);
@@ -23,7 +25,6 @@ export async function queuePostAtSpecifiedTime(time: Date, functionName: String)
       seconds: Math.floor(time.getTime() / 1000),
     },
   };
-
   // Send create task request.
-  await client.createTask({ parent: parent, task: task });
+  await client.createTask({ parent, task });
 }

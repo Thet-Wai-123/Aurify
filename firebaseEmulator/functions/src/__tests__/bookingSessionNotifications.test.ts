@@ -45,7 +45,7 @@ beforeAll(async () => {
   }
 });
 
-// Need to set up actual FCM in client side and use that to complete integration test, for now we can see that it gets triggered through the console
+// Need to set up actual FCM in client side and use that to complete integration test, for now we can see that firebase functions get triggered through the console
 describe("Booking Session Notifications", () => {
   // Update a field in collection -> triggers firebase function -> sends FCM request
   it("Testing sendBookingRequestNotification function triggers when requests field is updated", async () => {
@@ -60,5 +60,20 @@ describe("Booking Session Notifications", () => {
 
     // Take into consideration the race condition for the trigger to happen
     await new Promise((r) => setTimeout(r, 3000));
+  });
+
+  // Setting time for a session -> queue task on google cloud tasks -> which will trigger firebase function when time is right -> send FCM request
+  it("Testing queue and send session reminders works with google cloud task", async () => {
+    const bookingSession = [
+      {
+        sessionName: "Test Session",
+        status: "open",
+        startTime: "2025-11-24 00:24:55 UTC",
+        endTime: "2025-11-24 01:24:55 UTC",
+        service: "",
+        requests: [],
+      },
+    ];
+    await db.collection("bookings").add(bookingSession);
   });
 });
