@@ -1,18 +1,58 @@
 rules_version='2'
 
 service cloud.firestore {
+  function onlyAppend(){
+    return request.resource.data.requests.hasAll(resource.data.requests);
+  }
+
+  // Make sure the request has only the specified allowed fields    
+  function editingOnlyAllowedFields(allowedFields) {
+      let editedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return editedKeys.hasOnly(allowedFields);
+  }
+
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2025, 10, 29);
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    match /bookings/{sessionId} {
+      allow read: if request.auth.uid != null;
+
+      // Handling requests to join
+      allow update: if request.auth.uid != null
+      && editingOnlyAllowedFields(['requests'])
+      && onlyAppend()
+      && request.resource.data.requests.size() == resource.data.requests.size() + 1
+      && request.auth.uid in request.resource.data.requests
+      // Isn't already requested before
+      && !(request.auth.uid in resource.data.requests);
+
+      //Owner can still edit
+      allow create: if request.auth.uid == request.resource.data.owner;
+      allow write: if request.auth.uid == resource.data.owner;
+    }
+
+  match /friendRequests/{requestId} {
+    allow create: if request.auth != null
+    && request.resource.data.from == request.auth.uid;
+
+    //Only sender or requester should be able to make changes
+    allow read, delete: if request.auth != null
+    && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+  }
+
+    match /connections/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+    
+    match /blocks/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
     }
   }
 }
+
+
+

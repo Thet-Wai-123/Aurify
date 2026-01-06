@@ -41,7 +41,8 @@ beforeAll(async () => {
   ];
 
   for (const bookingSession of bookingSessions) {
-    await db.collection("bookings").add(bookingSession);
+    const ref = db.collection("bookings").doc();
+    await ref.set(bookingSession);
   }
 });
 
@@ -64,7 +65,7 @@ describe("Booking Session Notifications", () => {
 
   // Setting time for a session -> queue task on google cloud tasks -> which will trigger firebase function when time is right -> send FCM request
   it("Testing queue and send session reminders works with google cloud task", async () => {
-    const bookingSession = [
+    const bookingSession = 
       {
         sessionName: "Test Session",
         status: "open",
@@ -72,8 +73,7 @@ describe("Booking Session Notifications", () => {
         endTime: "2025-11-24 01:24:55 UTC",
         service: "",
         requests: [],
-      },
-    ];
+      };
     await db.collection("bookings").add(bookingSession);
   });
 });
